@@ -164,3 +164,7 @@ class DiffusionResponse(ImageWrapper):
     @property
     def sa(self):
         return self._sa
+    
+class Sketch(ImageWrapper):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)

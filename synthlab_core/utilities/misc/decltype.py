@@ -42,7 +42,7 @@ def is_nparray(buffer: bytes):
     return True
 
 
-__custom_type_declaration = ["synthlab_core.common.atomic."]
+__custom_type_declaration = ["synthlab_core.atomic."]
 
 
 def str2type(s: str):
@@ -63,6 +63,10 @@ def str2type(s: str):
             return x
 
     return None
+
+def patch(path):
+    global __custom_type_declaration
+    __custom_type_declaration.append(path)
 
 
 def type_compatible(src, dest):

@@ -3,6 +3,7 @@ import json
 import numpy as np
 import nltk
 from hashlib import sha512
+from .image import ImageWrapper
 
 
 class TextualPrompt(AtomicType):
@@ -103,5 +104,17 @@ class TextualPrompt(AtomicType):
     def __str__(self) -> str:
         return f"Prompt(text='{self.text}', labels={self.labels}, properties={self.properties}, seed={self.seed})"
 
+class ChemicalMolecule(TextualPrompt):
+    def __init__(self, text=None, *args, **kwargs):
+        super().__init__(text, *args, **kwargs)
 
+    def to_web_compatible(self):
+        try:
+            from rdkit import Chem, ChemDraw
+            import rdkit.Chem.Draw as ChemDraw
 
+            mol = Chem.MolFromSmiles(self.text)
+            return ImageWrapper(ChemDraw.MolToImage(mol)).to_web_compatible()
+
+        except:
+            return f'SMILES: {self.text}'

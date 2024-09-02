@@ -141,6 +141,12 @@ class INode(object):
             f"__call__ has not been implemented for {self.__class__.__name__}"
         )
 
+    # inference by batch        
+    def __batch__(self, *args, **kwargs):
+        raise NotImplementedError(
+            f"__batch__ has not been implemented for {self.__class__.__name__}"
+        )
+
 
 class IMasterNode(object):
     """Base class for master nodes in pipeline.
@@ -206,8 +212,6 @@ class IMasterNode(object):
                 raise ValueError(
                     f"Error in {cls.__name__}, first item of tuple spec must be a string, specifing name_in_config"
                 )
-
-            # TODO: check if input and output are atomic types
 
     def __call__(self, *args, **kwargs):
         raise NotImplementedError(

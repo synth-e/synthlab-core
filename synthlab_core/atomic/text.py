@@ -118,3 +118,10 @@ class ChemicalMolecule(TextualPrompt):
 
         except:
             return f'SMILES: {self.text}'
+        
+class Identity(TextualPrompt):
+    def __init__(self, text):
+        super().__init__(text)
+        
+    def to_web_compatible(self):
+        return 'Identity: ' + self.text

@@ -1,10 +1,9 @@
-import datetime
-import random
 from inspect import signature
 from synthlab_core.utilities.misc.decltype import type2readble
 from hashlib import sha512
+import torch
 
-class INode(object):
+class INode(torch.nn.Module):
     """Base class for all nodes in pipeline
 
     Notes
@@ -13,27 +12,17 @@ class INode(object):
     """
 
     def get_hashable(self):
-        data = []
-
-        hashable_data_type = (str, int, float, bool, type(None))
-        ignore = ["inference_device", "idle_device", "low_resource_mode"]
-
-        for k, v in self.__dict__.items():
-            if k in ignore:
-                continue
-
-            if isinstance(v, hashable_data_type):
-                data.append((k, v))
-            else:
-                data.append((k, str(v)))
-
-        return data
+        return self.cache_keys
 
     def __init__(self, *args, **kwargs) -> None:
+        super(INode, self).__init__()
+
+        self.lazy_pool = {}
         self._initialized = True
         self.inference_device = kwargs.get("inference_device", "cpu")
-        self.low_resource_mode = kwargs.get("low_resource_mode", False)
+        self.switch_device = kwargs.get("switch_device", False)
         self.idle_device = "cpu"
+        self.cache_keys = kwargs.get("cache_keys", [])
 
     def set_inference_device(self, device):
         self.inference_device = device
@@ -56,14 +45,19 @@ class INode(object):
             _sha512.update(str(v).encode())
 
         _sha512.update(self.__class__.__name__.encode())
-
         return _sha512.hexdigest()
 
-    # deprecated
-    def generate_identity(self, *args, **kwargs):
-        return datetime.datetime.now().strftime("%Y%m%d%H%M%S") + str(
-            random.randint(0, 9999)
-        ).zfill(5)
+    def ready(self, force=False):
+        if self.switch_device or force:
+            self.to(self.inference_device)
+
+    def idle(self, force=False):
+        if self.switch_device or force:
+            self.to(self.idle_device)
+
+    def lazy_update(self, key, val):
+        if val != getattr(self, key):
+            self.lazy_pool[key] = val
 
     @classmethod
     def meta(cls):
@@ -90,6 +84,23 @@ class INode(object):
     @classmethod
     def params_specs(cls) -> list[tuple[str, type]]:
         return []
+    
+    
+    @classmethod
+    def out_dtype(self):
+        if len(self.out_specs()) == 0:
+            return None
+        
+        return self.out_specs()[0][1]
+    
+    @classmethod
+    def in_dtype(self, key):
+        
+        for k in self.in_specs():
+            if k[0] == key:
+                return k[1]
+        
+        return None
 
     @classmethod
     def sanity_format_check(cls):
@@ -125,7 +136,7 @@ class INode(object):
 
             # TODO: check if input and output are atomic types
 
-        sig = signature(cls.__call__)
+        sig = signature(cls.forward)
         call_arg_count = 0  # (not count args and kwargs)
         # TODO: better way to check if arg is args-liked parameter
         for arg, type in sig.parameters.items():
@@ -133,22 +144,38 @@ class INode(object):
 
         if call_arg_count != len(cls.in_specs()):
             raise ValueError(
-                f"Input specs of module {cls.__name__} do not match with __call__ args, input specs count={len(cls.in_specs())}, __call__ args count={call_arg_count}"
+                f"Input specs of module {cls.__name__} do not match with forward args, input specs count={len(cls.in_specs())}, __call__ args count={call_arg_count}"
             )
 
-    def __call__(self, *args, **kwargs):
-        raise NotImplementedError(
-            f"__call__ has not been implemented for {self.__class__.__name__}"
-        )
+    def lazy_reload(self):
+        prev = {}
 
-    # inference by batch        
-    def __batch__(self, *args, **kwargs):
-        raise NotImplementedError(
-            f"__batch__ has not been implemented for {self.__class__.__name__}"
-        )
+        for k, v in self.lazy_pool.items():
+            if hasattr(self, k) and getattr(self, k) != v:
+                prev[k] = getattr(self, k)
+                setattr(self, k, v)
+
+        return prev
+
+    def __call__(self, *args, **kwargs):        
+        self.lazy_reload()
+
+        try:
+            self.ready()
+            return super(INode, self).__call__(*args, **kwargs)
+        except Exception as e:
+            raise e
+        finally:
+            self.idle()
+
+    def __batch_call__(self, inputs, **kwargs):        
+        self.ready(True)
+        for item in inputs:
+            yield self.forward(*item, **kwargs)
+        self.idle(True)
 
 
-class IMasterNode(object):
+class IMasterNode(torch.nn.Module):
     """Base class for master nodes in pipeline.
 
     Notes
@@ -157,12 +184,7 @@ class IMasterNode(object):
     """
 
     def __init__(self, *args, **kwargs) -> None:
-        pass
-
-    def generate_identity(self, *args, **kwargs):
-        return datetime.datetime.now().strftime("%Y%m%d%H%M%S") + str(
-            random.randint(0, 9999)
-        ).zfill(5)
+        super(IMasterNode, self).__init__()
 
     @classmethod
     def meta(cls):
@@ -213,7 +235,7 @@ class IMasterNode(object):
                     f"Error in {cls.__name__}, first item of tuple spec must be a string, specifing name_in_config"
                 )
 
-    def __call__(self, *args, **kwargs):
+    def forward(self, *args, **kwargs):
         raise NotImplementedError(
             f"__call__ has not been implemented for {self.__class__.__name__}"
         )

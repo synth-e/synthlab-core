@@ -6,10 +6,20 @@ __classes__ = {}
 class ClassType(str, Enum):
     NODE = "node"
     MASTER_NODE = "master_node"
+    DATA_TYPE = "data_type"
 
 
 def register(cls_type: ClassType, cls) -> None:
     global __classes__
+    
+    print(f"Registering {cls_type}.{cls.__name__}")
+    
+    if cls_type == ClassType.NODE:
+        inspecs = cls.in_specs()
+        outspecs = cls.out_specs()
+        
+        if len(outspecs) == 0:
+            raise ValueError(f"Output specs of {cls.__name__} is empty")
 
     if cls_type not in __classes__:
         __classes__[cls_type] = {}

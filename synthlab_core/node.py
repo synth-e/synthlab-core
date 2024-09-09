@@ -168,10 +168,13 @@ class INode(torch.nn.Module):
         finally:
             self.idle()
 
-    def __batch_call__(self, inputs, **kwargs):        
-        self.ready(True)
-        for item in inputs:
+    def __batch_call__(self, inputs, n_inputs, **kwargs):        
+        self.ready(True)        
+
+        for i in range(n_inputs):
+            item = [inputs[j][i] for j in range(len(inputs))]
             yield self.forward(*item, **kwargs)
+
         self.idle(True)
 
 

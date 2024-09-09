@@ -12,8 +12,6 @@ class ClassType(str, Enum):
 def register(cls_type: ClassType, cls) -> None:
     global __classes__
     
-    print(f"Registering {cls_type}.{cls.__name__}")
-    
     if cls_type == ClassType.NODE:
         inspecs = cls.in_specs()
         outspecs = cls.out_specs()
